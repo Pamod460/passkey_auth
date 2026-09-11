@@ -9,8 +9,7 @@ def create_session_after_passkey_auth(user_email: str) -> dict:
             return {"success": False, "message": "User account is not enabled."}
 
         login_manager = frappe.auth.LoginManager()
-        login_manager.user = user_email
-        login_manager.login_user(user_email)
+        login_manager.login_as(user_email)
         frappe.db.commit()
 
         return {

@@ -36,7 +36,7 @@ def get_authentication_options(user_email: str = None) -> dict:
 
     options_dict = {
         "rpId": rp_id,
-        "challenge": challenge,
+        "challenge": base64url_encode(challenge),
         "timeout": (settings.challenge_timeout or 120) * 1000,
         "userVerification": uv,
     }
@@ -52,7 +52,7 @@ def get_authentication_options(user_email: str = None) -> dict:
 
         allow_credentials = []
         for cred in credentials:
-            entry = {"id": base64url_decode(cred.credential_id), "type": "public-key"}
+            entry = {"id": cred.credential_id, "type": "public-key"}
             if cred.transports:
                 try:
                     transports = json.loads(cred.transports)

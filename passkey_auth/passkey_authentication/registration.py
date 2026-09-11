@@ -48,20 +48,17 @@ def get_registration_options(user_email: str) -> dict:
     existing_creds = frappe.db.get_all("Passkey Credential", filters={"user": user_email, "enabled": 1, "revoked": 0}, pluck="credential_id")
     exclude_credentials = []
     for cred_id in existing_creds:
-        try:
-            exclude_credentials.append({"id": base64url_decode(cred_id), "type": "public-key"})
-        except Exception:
-            continue
+        exclude_credentials.append({"id": cred_id, "type": "public-key"})
 
     uv = settings.require_user_verification or "preferred"
 
-    user_id_bytes = user_handle.encode("utf-8")
+    user_handle_b64 = base64url_encode(user_handle.encode("utf-8"))
     display_name = user.full_name or user.email or user_email
 
     options_dict = {
         "rp": {"name": rp_name, "id": rp_id},
-        "user": {"id": user_id_bytes, "name": user_email, "displayName": display_name},
-        "challenge": challenge,
+        "user": {"id": user_handle_b64, "name": user_email, "displayName": display_name},
+        "challenge": base64url_encode(challenge),
         "pubKeyCredParams": [
             {"type": "public-key", "alg": -7},
             {"type": "public-key", "alg": -257},

@@ -14,6 +14,7 @@ app_include_js = [
     "/assets/passkey_auth/js/passkey_utils.js",
     "/assets/passkey_auth/js/passkey_login.js",
     "/assets/passkey_auth/js/passkey_settings.js",
+    "/assets/passkey_auth/js/passkey_registration_popup.js",
 ]
 
 # --------------------------------------------------------------------------

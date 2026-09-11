@@ -1,1 +1,4 @@
 passkey_auth.patches.v1_0.create_user_handle_custom_field
+
+[post_model_sync]
+passkey_auth.patches.v1_0.fix_user_handle_unique_constraint

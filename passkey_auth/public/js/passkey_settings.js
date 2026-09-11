@@ -4,31 +4,27 @@
 (function () {
     "use strict";
 
-    function waitForFrappe(callback, maxWait) {
-        maxWait = maxWait || 10000;
-        var start = Date.now();
+    function waitForDesk(callback) {
         function check() {
-            if (typeof frappe !== "undefined" && frappe.ready && frappe.pages) {
+            if (typeof frappe !== "undefined" && frappe.session && frappe.session.user && frappe.pages) {
                 callback();
-            } else if (Date.now() - start < maxWait) {
-                setTimeout(check, 100);
+            } else {
+                setTimeout(check, 200);
             }
         }
         check();
     }
 
-    waitForFrappe(function () {
+    waitForDesk(function () {
         var utils = UCSCPasskey.utils;
 
-        frappe.ready(function () {
-            if (!frappe.pages || !frappe.pages["passkey-settings"]) return;
+        if (!frappe.pages["passkey-settings"]) return;
 
-            frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
-                var page = frappe.pages["passkey-settings"];
-                page.set_title(__("Passkeys"));
-                renderPasskeyPage(page, wrapper);
-            };
-        });
+        frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
+            var page = frappe.pages["passkey-settings"];
+            page.set_title(__("Passkeys"));
+            renderPasskeyPage(page, wrapper);
+        };
 
         function renderPasskeyPage(page, wrapper) {
             var $wrapper = $(wrapper).find(".page-body");

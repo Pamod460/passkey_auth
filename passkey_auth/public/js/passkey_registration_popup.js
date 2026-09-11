@@ -7,27 +7,28 @@
 
     var SKIP_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-    function waitForFrappe(callback, maxWait) {
-        maxWait = maxWait || 10000;
-        var start = Date.now();
+    function waitForDesk(callback) {
         function check() {
-            if (typeof frappe !== "undefined" && frappe.ready && frappe.session) {
+            if (typeof frappe !== "undefined" && frappe.session && frappe.session.user) {
                 callback();
-            } else if (Date.now() - start < maxWait) {
-                setTimeout(check, 100);
+            } else {
+                setTimeout(check, 200);
             }
         }
         check();
     }
 
-    waitForFrappe(function () {
-        frappe.ready(function () {
-            setTimeout(checkAndShowPopup, 3000);
-        });
+    waitForDesk(function () {
+        setTimeout(checkAndShowPopup, 3000);
     });
 
     async function checkAndShowPopup() {
         var utils = UCSCPasskey.utils;
+        if (!utils) {
+            console.log("[Passkey Popup] Skipped: utils not loaded");
+            return;
+        }
+
         try {
             var user = frappe.session && frappe.session.user;
             if (!user || user === "Guest") {

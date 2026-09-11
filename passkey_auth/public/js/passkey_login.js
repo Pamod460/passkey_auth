@@ -5,36 +5,25 @@
 (function () {
     "use strict";
 
-    function waitForFrappe(callback, maxWait) {
-        maxWait = maxWait || 10000;
-        var start = Date.now();
-        function check() {
-            if (typeof frappe !== "undefined" && frappe.ready) {
-                callback();
-            } else if (Date.now() - start < maxWait) {
-                setTimeout(check, 100);
-            }
-        }
-        check();
-    }
-
-    waitForFrappe(function () {
-        var utils = UCSCPasskey.utils;
-        if (!utils.isWebAuthnSupported()) return;
-
-        frappe.ready(function () {
-            setTimeout(addPasskeyButton, 500);
-        });
+    $(document).ready(function () {
+        setTimeout(addPasskeyButton, 500);
     });
 
     function addPasskeyButton() {
         if (document.getElementById("passkey-login-btn")) return;
+        if (typeof UCSCPasskey === "undefined" || !UCSCPasskey.utils) {
+            setTimeout(addPasskeyButton, 500);
+            return;
+        }
 
         var loginForm = document.querySelector(".login-content") || document.querySelector("#login-form") || document.querySelector(".page-card");
         if (!loginForm) {
             setTimeout(addPasskeyButton, 500);
             return;
         }
+
+        var utils = UCSCPasskey.utils;
+        if (!utils.isWebAuthnSupported()) return;
 
         var container = document.createElement("div");
         container.id = "passkey-login-container";

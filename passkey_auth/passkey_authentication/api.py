@@ -8,7 +8,7 @@ def registration_options():
     user = frappe.session.user
     if not user or user == "Guest":
         return {"success": False, "message": "Authentication required."}
-    from .passkey.registration import get_registration_options
+    from .registration import get_registration_options
     return get_registration_options(user)
 
 
@@ -21,7 +21,7 @@ def verify_registration():
     credential = data.get("credential")
     if not credential:
         return {"success": False, "message": "Credential data is required."}
-    from .passkey.registration import verify_registration_response
+    from .registration import verify_registration_response
     return verify_registration_response(user, credential)
 
 
@@ -29,7 +29,7 @@ def verify_registration():
 def authentication_options():
     data = frappe.request.json or {}
     user_email = data.get("user_email", "").strip()
-    from .passkey.authentication import get_authentication_options
+    from .authentication import get_authentication_options
     return get_authentication_options(user_email or None)
 
 
@@ -41,7 +41,7 @@ def verify_authentication():
     session_token = data.get("session_token")
     if not credential:
         return {"success": False, "message": "Credential data is required."}
-    from .passkey.authentication import verify_authentication as do_verify
+    from .authentication import verify_authentication as do_verify
     return do_verify(user_email=user_email, credential_json=credential, session_token=session_token)
 
 

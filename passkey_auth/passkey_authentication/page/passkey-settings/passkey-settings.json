@@ -1,6 +1,7 @@
 {
     "name": "passkey-settings",
     "module": "Passkey Authentication",
+    "doctype": "Page",
     "type": "page",
     "label": "Passkey Settings",
     "icon": "octicon octicon-key-24",

@@ -5,9 +5,7 @@ import frappe
 def create_session_after_passkey_auth(user_email: str) -> dict:
     try:
         user = frappe.get_doc("User", user_email)
-        if not user or user.disabled:
-            return {"success": False, "message": "User account is disabled."}
-        if not user.enabled:
+        if not user or not user.enabled:
             return {"success": False, "message": "User account is not enabled."}
 
         login_manager = frappe.auth.LoginManager()

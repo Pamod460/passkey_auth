@@ -134,8 +134,8 @@ def verify_authentication(user_email: str = None, credential_json: dict = None,
             return {"success": False, "message": "Passkey authentication failed."}
 
     # Verify user is active
-    user_data = frappe.db.get_value("User", identified_user, ["name", "enabled", "disabled", "full_name"], as_dict=True)
-    if not user_data or not user_data.enabled or user_data.disabled:
+    user_data = frappe.db.get_value("User", identified_user, ["name", "enabled", "full_name"], as_dict=True)
+    if not user_data or not user_data.enabled:
         _log_event(identified_user, cred_doc.name, "authentication", False, "User disabled")
         return {"success": False, "message": "User account is disabled."}
 

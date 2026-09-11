@@ -21,10 +21,10 @@ def get_registration_options(user_email: str) -> dict:
     if not settings.enabled:
         return {"success": False, "message": "Passkey authentication is disabled."}
 
-    user = frappe.db.get_value("User", user_email, ["name", "full_name", "email", "enabled", "disabled"], as_dict=True)
+    user = frappe.db.get_value("User", user_email, ["name", "full_name", "email", "enabled"], as_dict=True)
     if not user:
         return {"success": False, "message": "User not found."}
-    if user.disabled or not user.enabled:
+    if not user.enabled:
         return {"success": False, "message": "User account is disabled."}
 
     existing_count = frappe.db.count("Passkey Credential", filters={"user": user_email, "enabled": 1, "revoked": 0})

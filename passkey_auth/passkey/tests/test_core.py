@@ -1,7 +1,4 @@
-"""Unit tests for passkey_auth core utilities.
-Tests that don't require frappe run standalone.
-Tests that require frappe are skipped when frappe is unavailable.
-"""
+"""Unit tests for passkey_auth core utilities."""
 import unittest
 
 try:
@@ -14,9 +11,8 @@ except ImportError:
 class TestBase64URL(unittest.TestCase):
     def test_encode_decode_roundtrip(self):
         from passkey_auth.passkey.serialization import base64url_encode, base64url_decode
-        for data in [b"hello", b"\x00\x01\x02", b"\xff\xfe", b"x" * 100, b"" * 0]:
-            if data:
-                self.assertEqual(data, base64url_decode(base64url_encode(data)))
+        for data in [b"hello", b"\x00\x01\x02", b"\xff\xfe", b"x" * 100]:
+            self.assertEqual(data, base64url_decode(base64url_encode(data)))
 
     def test_encode_no_padding(self):
         from passkey_auth.passkey.serialization import base64url_encode

@@ -17,6 +17,12 @@ app_include_js = [
     "/assets/passkey_auth/js/passkey_registration_popup.js",
 ]
 
+web_include_css = "/assets/passkey_auth/css/passkey.css"
+web_include_js = [
+    "/assets/passkey_auth/js/passkey_utils.js",
+    "/assets/passkey_auth/js/passkey_login.js",
+]
+
 # --------------------------------------------------------------------------
 # Doc Events
 # --------------------------------------------------------------------------

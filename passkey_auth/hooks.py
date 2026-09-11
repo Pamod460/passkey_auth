@@ -22,7 +22,7 @@ app_include_js = [
 
 doc_events = {
     "User": {
-        "after_insert": "passkey_auth.passkey.utils.generate_user_handle_on_insert",
+        "after_insert": "passkey_auth.passkey_authentication.utils.generate_user_handle_on_insert",
     }
 }
 
@@ -32,7 +32,7 @@ doc_events = {
 
 scheduler_events = {
     "daily": [
-        "passkey_auth.passkey.tasks.cleanup_expired_challenges",
+        "passkey_auth.passkey_authentication.tasks.cleanup_expired_challenges",
     ],
 }
 
@@ -52,9 +52,9 @@ website_route_rules = [
 # --------------------------------------------------------------------------
 
 has_permission = {
-    "Passkey Credential": "passkey_auth.passkey.doctype.passkey_credential.passkey_credential.has_permission",
-    "Passkey Authentication Log": "passkey_auth.passkey.doctype.passkey_authentication_log.passkey_authentication_log.has_permission",
-    "Passkey Settings": "passkey_auth.passkey.doctype.passkey_settings.passkey_settings.has_permission",
+    "Passkey Credential": "passkey_auth.passkey_authentication.doctype.passkey_credential.passkey_credential.has_permission",
+    "Passkey Authentication Log": "passkey_auth.passkey_authentication.doctype.passkey_authentication_log.passkey_authentication_log.has_permission",
+    "Passkey Settings": "passkey_auth.passkey_authentication.doctype.passkey_settings.passkey_settings.has_permission",
 }
 
 # --------------------------------------------------------------------------
@@ -72,4 +72,4 @@ fixtures = [
 # Installation
 # --------------------------------------------------------------------------
 
-after_install = "passkey_auth.passkey.setup.after_install"
+after_install = "passkey_auth.passkey_authentication.setup.after_install"

@@ -62,7 +62,7 @@ UCSCPasskey.utils = {
     apiCallAsync: function (method, args) {
         return new Promise(function (resolve, reject) {
             frappe.call({
-                method: "passkey_auth.api." + method,
+                method: "passkey_auth.passkey_authentication.api." + method,
                 args: args || {},
                 callback: function (r) {
                     resolve(r.message || r);

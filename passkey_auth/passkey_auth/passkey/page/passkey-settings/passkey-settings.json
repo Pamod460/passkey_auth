@@ -1,0 +1,12 @@
+{
+    "name": "passkey-settings",
+    "module": "Passkey Authentication",
+    "type": "page",
+    "label": "Passkey Settings",
+    "icon": "octicon octicon-key-24",
+    "route": "passkey-settings",
+    "doc_type": "",
+    "sequence_id": 1,
+    "links": [],
+    "content": "{}"
+}

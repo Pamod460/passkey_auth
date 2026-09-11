@@ -61,9 +61,13 @@ UCSCPasskey.utils = {
 
     apiCallAsync: function (method, args) {
         return new Promise(function (resolve, reject) {
+            var safeArgs = args || {};
+            if (safeArgs.credential && typeof safeArgs.credential === "object") {
+                safeArgs.credential = JSON.stringify(safeArgs.credential);
+            }
             frappe.call({
                 method: "passkey_auth.passkey_authentication.api." + method,
-                args: args || {},
+                args: safeArgs,
                 callback: function (r) {
                     resolve(r.message || r);
                 },

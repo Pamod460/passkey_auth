@@ -1,6 +1,29 @@
 """API endpoints for WebAuthn/Passkey authentication."""
+import json
 import frappe
 from frappe import _
+
+
+def _get_data():
+    """Get request data from JSON body or form-encoded args."""
+    data = {}
+    if frappe.request:
+        if frappe.request.content_type and "json" in frappe.request.content_type:
+            data = frappe.request.json or {}
+        else:
+            data = frappe.form_dict or {}
+    return data
+
+
+def _parse_credential(data):
+    """Extract credential from data, handling both dict and JSON string."""
+    credential = data.get("credential")
+    if isinstance(credential, str):
+        try:
+            credential = json.loads(credential)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return credential
 
 
 @frappe.whitelist(allow_guest=True)
@@ -17,8 +40,8 @@ def verify_registration():
     user = frappe.session.user
     if not user or user == "Guest":
         return {"success": False, "message": "Authentication required."}
-    data = frappe.request.json or {}
-    credential = data.get("credential")
+    data = _get_data()
+    credential = _parse_credential(data)
     if not credential:
         return {"success": False, "message": "Credential data is required."}
     from .registration import verify_registration_response
@@ -27,7 +50,7 @@ def verify_registration():
 
 @frappe.whitelist(allow_guest=True)
 def authentication_options():
-    data = frappe.request.json or {}
+    data = _get_data()
     user_email = data.get("user_email", "").strip()
     from .authentication import get_authentication_options
     return get_authentication_options(user_email or None)
@@ -35,9 +58,9 @@ def authentication_options():
 
 @frappe.whitelist(allow_guest=True)
 def verify_authentication():
-    data = frappe.request.json or {}
+    data = _get_data()
     user_email = data.get("user_email", "").strip() or None
-    credential = data.get("credential")
+    credential = _parse_credential(data)
     session_token = data.get("session_token")
     if not credential:
         return {"success": False, "message": "Credential data is required."}
@@ -64,7 +87,7 @@ def rename_credential():
     user = frappe.session.user
     if not user or user == "Guest":
         return {"success": False, "message": "Authentication required."}
-    data = frappe.request.json or {}
+    data = _get_data()
     credential_name = data.get("credential_name")
     nickname = data.get("nickname", "").strip()
     if not credential_name or not nickname:
@@ -82,7 +105,7 @@ def revoke_credential():
     user = frappe.session.user
     if not user or user == "Guest":
         return {"success": False, "message": "Authentication required."}
-    data = frappe.request.json or {}
+    data = _get_data()
     credential_name = data.get("credential_name")
     if not credential_name:
         return {"success": False, "message": "Credential name is required."}
@@ -105,7 +128,7 @@ def delete_credential():
     user = frappe.session.user
     if not user or user == "Guest":
         return {"success": False, "message": "Authentication required."}
-    data = frappe.request.json or {}
+    data = _get_data()
     credential_name = data.get("credential_name")
     if not credential_name:
         return {"success": False, "message": "Credential name is required."}

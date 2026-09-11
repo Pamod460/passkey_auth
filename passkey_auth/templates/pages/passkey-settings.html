@@ -1,0 +1,12 @@
+{% extends "templates/web.html" %}
+{% block page_content %}
+<div class="passkey-page-container" style="max-width: 800px; margin: 0 auto; padding: 20px;">
+    <h2>{{ _("Passkeys") }}</h2>
+    <p class="text-muted">{{ _("Sign in using your device's fingerprint, face recognition, PIN, or security key.") }}</p>
+    {% if frappe.session.user == "Guest" %}
+    <div class="alert alert-warning">{{ _("Please log in to manage your passkeys.") }} <a href="/login">{{ _("Login") }}</a></div>
+    {% else %}
+    <div id="passkey-web-settings"></div>
+    {% endif %}
+</div>
+{% endblock %}

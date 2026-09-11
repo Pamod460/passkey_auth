@@ -124,11 +124,14 @@ def delete_credential():
 
 @frappe.whitelist(allow_guest=True)
 def get_status():
+    enabled = False
+    password_allowed = True
     try:
         settings = frappe.get_single("Passkey Settings")
         enabled = bool(settings.enabled)
+        password_allowed = bool(settings.password_fallback_enabled if enabled else True)
     except Exception:
-        enabled = False
+        pass
     passkey_count = 0
     user = frappe.session.user
     if user and user != "Guest":
@@ -137,5 +140,5 @@ def get_status():
         "success": True,
         "enabled": enabled,
         "passkey_count": passkey_count,
-        "password_allowed": bool(settings.password_fallback_enabled if enabled else True),
+        "password_allowed": password_allowed,
     }

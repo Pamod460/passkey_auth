@@ -5,33 +5,46 @@
 (function () {
     "use strict";
 
-    const utils = UCSCPasskey.utils;
+    function waitForFrappe(callback, maxWait) {
+        maxWait = maxWait || 10000;
+        var start = Date.now();
+        function check() {
+            if (typeof frappe !== "undefined" && frappe.ready) {
+                callback();
+            } else if (Date.now() - start < maxWait) {
+                setTimeout(check, 100);
+            }
+        }
+        check();
+    }
 
-    function initPasskeyLogin() {
+    waitForFrappe(function () {
+        var utils = UCSCPasskey.utils;
         if (!utils.isWebAuthnSupported()) return;
+
         frappe.ready(function () {
             setTimeout(addPasskeyButton, 500);
         });
-    }
+    });
 
     function addPasskeyButton() {
         if (document.getElementById("passkey-login-btn")) return;
 
-        const loginForm = document.querySelector(".login-content") || document.querySelector("#login-form") || document.querySelector(".page-card");
+        var loginForm = document.querySelector(".login-content") || document.querySelector("#login-form") || document.querySelector(".page-card");
         if (!loginForm) {
             setTimeout(addPasskeyButton, 500);
             return;
         }
 
-        const container = document.createElement("div");
+        var container = document.createElement("div");
         container.id = "passkey-login-container";
         container.style.cssText = "margin: 16px 0; text-align: center;";
 
-        const divider = document.createElement("div");
+        var divider = document.createElement("div");
         divider.style.cssText = "display: flex; align-items: center; margin: 16px 0; color: #8d99a6; font-size: 12px;";
         divider.innerHTML = '<div style="flex: 1; border-bottom: 1px solid #ebeef0;"></div><span style="padding: 0 12px;">or</span><div style="flex: 1; border-bottom: 1px solid #ebeef0;"></div>';
 
-        const btn = document.createElement("button");
+        var btn = document.createElement("button");
         btn.id = "passkey-login-btn";
         btn.type = "button";
         btn.className = "btn btn-sm btn-primary-dark btn-block";
@@ -42,7 +55,7 @@
         container.appendChild(divider);
         container.appendChild(btn);
 
-        const loginBtn = loginForm.querySelector('button[type="submit"], .btn-primary');
+        var loginBtn = loginForm.querySelector('button[type="submit"], .btn-primary');
         if (loginBtn && loginBtn.parentNode) {
             loginBtn.parentNode.insertBefore(container, loginBtn.nextSibling);
         } else {
@@ -52,18 +65,19 @@
 
     async function handlePasskeyLogin(e) {
         e.preventDefault();
-        const btn = document.getElementById("passkey-login-btn");
+        var utils = UCSCPasskey.utils;
+        var btn = document.getElementById("passkey-login-btn");
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ' + __("Authenticating...");
         }
 
         try {
-            const result = await utils.apiCallAsync("authentication_options", { user_email: null });
+            var result = await utils.apiCallAsync("authentication_options", { user_email: null });
             if (!result.success) throw new Error(result.message);
 
-            const options = result.options;
-            const credentialRequestOptions = {
+            var options = result.options;
+            var credentialRequestOptions = {
                 publicKey: {
                     challenge: utils.base64urlDecode(options.challenge),
                     rpId: options.rpId,
@@ -78,9 +92,9 @@
                 });
             }
 
-            const assertion = await navigator.credentials.get(credentialRequestOptions);
+            var assertion = await navigator.credentials.get(credentialRequestOptions);
 
-            const credential = {
+            var credential = {
                 id: assertion.id,
                 rawId: utils.base64urlEncode(assertion.rawId),
                 type: assertion.type,
@@ -94,7 +108,7 @@
                 clientExtensionResults: assertion.getClientExtensionResults(),
             };
 
-            const verifyResult = await utils.apiCallAsync("verify_authentication", {
+            var verifyResult = await utils.apiCallAsync("verify_authentication", {
                 credential: credential,
                 session_token: options._session_token || null,
             });
@@ -107,7 +121,7 @@
             }
         } catch (error) {
             console.error("Passkey login error:", error);
-            const message = error.name ? utils.mapWebAuthnError(error) : error.message || __("Passkey authentication failed.");
+            var message = error.name ? utils.mapWebAuthnError(error) : error.message || __("Passkey authentication failed.");
             utils.showError(message);
         } finally {
             if (btn) {
@@ -116,6 +130,4 @@
             }
         }
     }
-
-    initPasskeyLogin();
 })();

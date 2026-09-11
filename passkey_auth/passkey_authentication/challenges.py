@@ -22,40 +22,40 @@ def generate_challenge() -> bytes:
 
 def store_registration_challenge(user_email: str, challenge: bytes):
     key = f"{_PREFIX}reg:{user_email}"
-    frappe.cache().set(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
+    frappe.cache().set_value(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
 
 
 def get_and_clear_registration_challenge(user_email: str):
     key = f"{_PREFIX}reg:{user_email}"
-    challenge = frappe.cache().get(key)
+    challenge = frappe.cache().get_value(key)
     if challenge:
-        frappe.cache().delete(key)
+        frappe.cache().delete_value(key)
     return challenge
 
 
 def store_authentication_challenge(user_email: str, challenge: bytes):
     key = f"{_PREFIX}auth:{user_email}"
-    frappe.cache().set(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
+    frappe.cache().set_value(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
 
 
 def get_and_clear_authentication_challenge(user_email: str):
     key = f"{_PREFIX}auth:{user_email}"
-    challenge = frappe.cache().get(key)
+    challenge = frappe.cache().get_value(key)
     if challenge:
-        frappe.cache().delete(key)
+        frappe.cache().delete_value(key)
     return challenge
 
 
 def store_discovery_challenge(challenge: bytes) -> str:
     token = base64url_encode(os.urandom(16))
     key = f"{_PREFIX}disc:{token}"
-    frappe.cache().set(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
+    frappe.cache().set_value(key, base64url_encode(challenge), expires_in_sec=_get_ttl())
     return token
 
 
 def get_and_clear_discovery_challenge(token: str):
     key = f"{_PREFIX}disc:{token}"
-    challenge = frappe.cache().get(key)
+    challenge = frappe.cache().get_value(key)
     if challenge:
-        frappe.cache().delete(key)
+        frappe.cache().delete_value(key)
     return challenge

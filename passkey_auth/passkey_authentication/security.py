@@ -52,14 +52,14 @@ def validate_rp_id(rp_id: str) -> bool:
 
 def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
     cache_key = f"passkey_ratelimit:{key}"
-    current = frappe.cache().get(cache_key)
+    current = frappe.cache().get_value(cache_key)
     if current is None:
-        frappe.cache().set(cache_key, 1, expires_in_sec=window)
+        frappe.cache().set_value(cache_key, 1, expires_in_sec=window)
         return True
     count = int(current)
     if count >= limit:
         return False
-    frappe.cache().set(cache_key, count + 1, expires_in_sec=window)
+    frappe.cache().set_value(cache_key, count + 1, expires_in_sec=window)
     return True
 
 

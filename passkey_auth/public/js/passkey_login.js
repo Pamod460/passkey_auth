@@ -6,7 +6,7 @@
     "use strict";
 
     $(document).ready(function () {
-        setTimeout(addPasskeyButton, 500);
+        setTimeout(addPasskeyButton, 800);
     });
 
     function addPasskeyButton() {
@@ -15,40 +15,45 @@
             setTimeout(addPasskeyButton, 500);
             return;
         }
+        if (!UCSCPasskey.utils.isWebAuthnSupported()) return;
 
-        var loginForm = document.querySelector(".login-content") || document.querySelector("#login-form") || document.querySelector(".page-card");
-        if (!loginForm) {
+        // Frappe 16 login: .page-card-actions contains submit button
+        // Frappe <16: #login-form .btn-primary
+        var actions = document.querySelector(".for-login .page-card-actions")
+            || document.querySelector(".page-card-actions")
+            || document.querySelector("#login-form")
+            || document.querySelector(".login-content");
+
+        if (!actions) {
             setTimeout(addPasskeyButton, 500);
             return;
         }
 
-        var utils = UCSCPasskey.utils;
-        if (!utils.isWebAuthnSupported()) return;
-
         var container = document.createElement("div");
         container.id = "passkey-login-container";
-        container.style.cssText = "margin: 16px 0; text-align: center;";
 
         var divider = document.createElement("div");
-        divider.style.cssText = "display: flex; align-items: center; margin: 16px 0; color: #8d99a6; font-size: 12px;";
+        divider.style.cssText = "display: flex; align-items: center; margin: 8px 0; color: #8d99a6; font-size: 12px;";
         divider.innerHTML = '<div style="flex: 1; border-bottom: 1px solid #ebeef0;"></div><span style="padding: 0 12px;">or</span><div style="flex: 1; border-bottom: 1px solid #ebeef0;"></div>';
 
         var btn = document.createElement("button");
         btn.id = "passkey-login-btn";
         btn.type = "button";
-        btn.className = "btn btn-sm btn-primary-dark btn-block";
-        btn.style.cssText = "display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; margin-top: 8px;";
+        btn.className = "es-button w-full";
+        btn.setAttribute("data-variant", "outline");
+        btn.style.cssText = "display: flex; align-items: center; justify-content: center; gap: 8px;";
         btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>' + __("Sign in with Passkey");
         btn.addEventListener("click", handlePasskeyLogin);
 
         container.appendChild(divider);
         container.appendChild(btn);
 
-        var loginBtn = loginForm.querySelector('button[type="submit"], .btn-primary');
-        if (loginBtn && loginBtn.parentNode) {
-            loginBtn.parentNode.insertBefore(container, loginBtn.nextSibling);
+        // Insert after submit button or at end of actions
+        var submitBtn = actions.querySelector('button[type="submit"]');
+        if (submitBtn && submitBtn.parentNode) {
+            submitBtn.parentNode.insertBefore(container, submitBtn.nextSibling);
         } else {
-            loginForm.appendChild(container);
+            actions.appendChild(container);
         }
     }
 

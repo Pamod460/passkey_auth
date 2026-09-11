@@ -108,6 +108,9 @@ def verify_authentication(user_email: str = None, credential_json: dict = None,
     if not expected_challenge:
         return {"success": False, "message": "Authentication challenge expired. Please try again."}
 
+    if isinstance(expected_challenge, str):
+        expected_challenge = base64url_decode(expected_challenge)
+
     # Identify user from credential if discoverable flow
     credential_id = base64url_encode(credential.raw_id)
 

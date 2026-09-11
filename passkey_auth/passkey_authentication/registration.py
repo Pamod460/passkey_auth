@@ -89,6 +89,9 @@ def verify_registration_response(user_email: str, credential_json: dict, origin:
     if not expected_challenge:
         return {"success": False, "message": "Registration challenge expired. Please try again."}
 
+    if isinstance(expected_challenge, str):
+        expected_challenge = base64url_decode(expected_challenge)
+
     rp_id = settings.rp_id or (frappe.request.host.split(":")[0] if frappe.request and frappe.request.host else "localhost")
     expected_origin = origin or _determine_expected_origin(settings, rp_id)
 
@@ -160,7 +163,7 @@ def verify_registration_response(user_email: str, credential_json: dict, origin:
     except Exception as e:
         frappe.log_error(title="Passkey Registration Error", message=f"User: {user_email}, Error: {str(e)}")
         _log_event(user_email, None, "registration", False, str(e))
-        return {"success": False, "message": "Passkey registration failed. Please try again."}
+        return {"success": False, "message": f"Passkey registration failed: {str(e)}"}
 
 
 def _determine_expected_origin(settings, rp_id):

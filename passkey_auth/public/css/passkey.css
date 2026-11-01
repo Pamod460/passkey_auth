@@ -19,3 +19,12 @@
 #passkey-login-btn:focus-visible, .passkey-card .btn:focus-visible {
     outline: 2px solid #5e64ff; outline-offset: 2px;
 }
+
+/* Management page cards */
+.passkey-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border: 1px solid #ebeef0; border-radius: 8px; padding: 16px; margin-bottom: 12px;
+}
+.passkey-card-title { font-weight: 600; }
+.passkey-card-meta { font-size: 12px; color: #8d99a6; }
+.passkey-card-actions { display: flex; gap: 8px; align-items: center; }

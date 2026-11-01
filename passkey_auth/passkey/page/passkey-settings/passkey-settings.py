@@ -1,5 +1,1 @@
-import frappe
-
-
-def get_context(context):
-    context.title = frappe._("Passkey Settings")
+# Desk page controller (all logic lives in passkey-settings.js and passkey/api.py).

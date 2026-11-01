@@ -6,7 +6,6 @@ class PasskeyAuthenticationLog(Document):
     pass
 
 
-def has_permission(doc, user):
-    if not user:
-        user = frappe.session.user
-    return frappe.db.exists("Has Role", {"parent": user, "role": "System Manager"})
+def has_permission(doc, user=None, ptype=None):
+    user = user or frappe.session.user
+    return "System Manager" in frappe.get_roles(user)

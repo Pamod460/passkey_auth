@@ -1,6 +1,62 @@
 """Session management for passkey authentication."""
 import frappe
 
+from .challenges import _cache
+
+# How long a fresh login or an explicit identity confirmation allows sensitive
+# actions (adding a passkey) without asking again.
+STEPUP_WINDOW_SECONDS = 300
+_STEPUP_PREFIX = "passkey_stepup:"
+
+
+def _session_id():
+    """Cookie session id, or a per-token id for OAuth Bearer requests.
+
+    For Bearer requests frappe.set_user() sets sid to the username, which would let one
+    confirmation unlock every token the user holds; bind it to the presented token instead.
+    """
+    req = getattr(frappe, "request", None)
+    headers = getattr(req, "headers", None) if req else None
+    auth = headers.get("Authorization", "") if headers else ""
+    if isinstance(auth, str) and auth[:7].lower() == "bearer " and auth[7:].strip():
+        import hashlib
+        return "bearer:" + hashlib.sha256(auth[7:].strip().encode()).hexdigest()
+    return getattr(frappe.session, "sid", None)
+
+
+def mark_stepup(user_email: str) -> None:
+    """Record that the user of the *current* session just re-confirmed their identity."""
+    sid = _session_id()
+    if not sid or sid == "Guest":
+        return
+    _cache().set_value(f"{_STEPUP_PREFIX}{sid}", user_email, expires_in_sec=STEPUP_WINDOW_SECONDS)
+
+
+def _session_is_fresh() -> bool:
+    data = getattr(frappe.session, "data", None) or {}
+    creation = data.get("creation") if hasattr(data, "get") else None
+    if not creation:
+        return False
+    try:
+        age = (frappe.utils.now_datetime() - frappe.utils.get_datetime(creation)).total_seconds()
+    except Exception:
+        return False
+    return 0 <= age <= STEPUP_WINDOW_SECONDS
+
+
+def has_recent_stepup(user_email: str) -> bool:
+    """True if this session was created in the last few minutes (any login method)
+    or the user confirmed their identity (password or passkey) in it recently."""
+    if _session_is_fresh():
+        return True
+    sid = _session_id()
+    if not sid or sid == "Guest":
+        return False
+    stored = _cache().get_value(f"{_STEPUP_PREFIX}{sid}")
+    if isinstance(stored, bytes):
+        stored = stored.decode("utf-8")
+    return stored == user_email
+
 
 def create_session_after_passkey_auth(user_email: str) -> dict:
     try:

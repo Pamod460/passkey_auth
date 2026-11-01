@@ -38,6 +38,12 @@ doc_events = {
 on_login = "passkey_auth.passkey_authentication.session.on_login"
 
 # --------------------------------------------------------------------------
+# Client apps: serves /.well-known/assetlinks.json, apple-app-site-association
+# and webauthn (related origins) from Passkey Client App records.
+# --------------------------------------------------------------------------
+page_renderer = ["passkey_auth.passkey_authentication.well_known.WellKnownRenderer"]
+
+# --------------------------------------------------------------------------
 # Scheduler Events
 # --------------------------------------------------------------------------
 scheduler_events = {

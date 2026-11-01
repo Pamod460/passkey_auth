@@ -10,11 +10,11 @@ from .challenges import (
     generate_challenge, get_and_clear_authentication_challenge, store_authentication_challenge,
 )
 from .security import (
-    check_authentication_rate_limit, check_secure_context, get_client_ip, get_expected_origins,
-    get_rp_id,
+    check_authentication_options_rate_limit, check_secure_context, get_client_ip,
+    get_expected_origins, get_rp_id, is_authentication_blocked, record_authentication_failure,
 )
 from .serialization import base64url_decode, base64url_encode
-from .session import create_session_after_passkey_auth
+from .session import create_session_after_passkey_auth, mark_stepup
 
 try:
     import webauthn  # noqa: F401
@@ -35,46 +35,61 @@ def _decoy_credential_id(user_email: str) -> str:
     return base64url_encode(hmac.new(secret, user_email.lower().encode(), hashlib.sha256).digest())
 
 
-def get_authentication_options(user_email: str = None) -> dict:
+def _allow_credentials(user_email: str) -> list:
+    credentials = frappe.get_all(
+        "Passkey Credential",
+        filters={"user": user_email, "enabled": 1, "revoked": 0},
+        fields=["credential_id", "transports"],
+    )
+    allow = []
+    for cred in credentials:
+        entry = {"id": cred.credential_id, "type": "public-key"}
+        try:
+            transports = json.loads(cred.transports or "[]")
+            if transports:
+                entry["transports"] = transports
+        except (json.JSONDecodeError, TypeError):
+            pass
+        allow.append(entry)
+    return allow
+
+
+def _preflight(settings):
+    """Common checks; returns (rp_id, error_dict_or_None)."""
     if not WEBAUTHN_AVAILABLE:
-        return {"success": False, "message": "WebAuthn library not available."}
-
-    settings = _settings()
+        return None, {"success": False, "message": "WebAuthn library not available."}
     if not settings.enabled:
-        return {"success": False, "message": "Passkey authentication is disabled."}
-    if not check_authentication_rate_limit(get_client_ip()):
-        return {"success": False, "message": "Too many attempts. Please try again later."}
-
+        return None, {"success": False, "message": "Passkey authentication is disabled."}
     rp_id = get_rp_id(settings)
     insecure = check_secure_context(settings, rp_id)
     if insecure:
-        return {"success": False, "message": insecure}
+        return None, {"success": False, "message": insecure}
+    return rp_id, None
 
-    challenge = generate_challenge()
-    options = {
+
+def _base_options(settings, rp_id, challenge) -> dict:
+    return {
         "rpId": rp_id,
         "challenge": base64url_encode(challenge),
         "timeout": (settings.challenge_timeout or 120) * 1000,
         "userVerification": settings.require_user_verification or "preferred",
     }
 
+
+def get_authentication_options(user_email: str = None) -> dict:
+    settings = _settings()
+    rp_id, error = _preflight(settings)
+    if error:
+        return error
+    if not check_authentication_options_rate_limit(get_client_ip()):
+        return {"success": False, "message": "Too many attempts. Please try again later."}
+
+    challenge = generate_challenge()
+    options = _base_options(settings, rp_id, challenge)
+
     if user_email:
         user_email = user_email.strip()
-        credentials = frappe.get_all(
-            "Passkey Credential",
-            filters={"user": user_email, "enabled": 1, "revoked": 0},
-            fields=["credential_id", "transports"],
-        )
-        allow = []
-        for cred in credentials:
-            entry = {"id": cred.credential_id, "type": "public-key"}
-            try:
-                transports = json.loads(cred.transports or "[]")
-                if transports:
-                    entry["transports"] = transports
-            except (json.JSONDecodeError, TypeError):
-                pass
-            allow.append(entry)
+        allow = _allow_credentials(user_email)
         if not allow:
             # Do not reveal whether the account exists / has passkeys.
             allow = [{"id": _decoy_credential_id(user_email), "type": "public-key"}]
@@ -88,33 +103,15 @@ def get_authentication_options(user_email: str = None) -> dict:
     return {"success": True, "options": options, "session_token": token}
 
 
-def verify_authentication(credential_json: dict, session_token: str) -> dict:
-    if not WEBAUTHN_AVAILABLE:
-        return {"success": False, "message": "WebAuthn library not available."}
-
-    settings = _settings()
-    if not settings.enabled:
-        return {"success": False, "message": "Passkey authentication is disabled."}
-
-    ip = get_client_ip()
-    if not check_authentication_rate_limit(ip):
-        return {"success": False, "message": "Too many attempts. Please try again later."}
-
-    rp_id = get_rp_id(settings)
-    insecure = check_secure_context(settings, rp_id)
-    if insecure:
-        return {"success": False, "message": insecure}
-
-    expected_challenge, expected_user = get_and_clear_authentication_challenge(session_token)
-    if not expected_challenge:
-        return {"success": False, "message": "Authentication challenge expired. Please try again."}
-
+def _verify_assertion(credential_json: dict, expected_challenge: bytes, expected_user, settings,
+                      rp_id: str, ip: str, operation: str):
+    """Verify an assertion against a stored credential. Returns (cred, error_dict)."""
     try:
         from webauthn.helpers import parse_authentication_credential_json
         credential = parse_authentication_credential_json(credential_json)
     except Exception as e:
-        log_event(expected_user, None, "authentication", False, f"Malformed response: {e}")
-        return {"success": False, "message": "Invalid authentication response."}
+        log_event(expected_user, None, operation, False, f"Malformed response: {e}")
+        return None, {"success": False, "message": "Invalid authentication response."}
 
     credential_id = base64url_encode(credential.raw_id)
     filters = {"credential_id": credential_id, "enabled": 1, "revoked": 0}
@@ -125,20 +122,20 @@ def verify_authentication(credential_json: dict, session_token: str) -> dict:
         ["name", "user", "public_key", "sign_count", "user_handle"], as_dict=True,
     )
     if not cred:
-        log_event(expected_user, None, "authentication", False, "Credential not found")
-        return {"success": False, "message": GENERIC_FAILURE}
+        log_event(expected_user, None, operation, False, "Credential not found")
+        return None, {"success": False, "message": GENERIC_FAILURE}
 
     user = cred.user
     # Discoverable flow: the authenticator-reported user handle must match what we issued.
-    returned_handle = credential.response.user_handle
+    # Some clients send an empty userHandle instead of omitting it; treat that as absent.
+    returned_handle = credential.response.user_handle or None
     if returned_handle is not None and cred.user_handle and returned_handle != cred.user_handle.encode("utf-8"):
-        log_event(user, cred.name, "authentication", False, "User handle mismatch")
-        return {"success": False, "message": GENERIC_FAILURE}
+        log_event(user, cred.name, operation, False, "User handle mismatch")
+        return None, {"success": False, "message": GENERIC_FAILURE}
 
-    enabled = frappe.db.get_value("User", user, "enabled")
-    if not enabled:
-        log_event(user, cred.name, "authentication", False, "User disabled")
-        return {"success": False, "message": GENERIC_FAILURE}
+    if not frappe.db.get_value("User", user, "enabled"):
+        log_event(user, cred.name, operation, False, "User disabled")
+        return None, {"success": False, "message": GENERIC_FAILURE}
 
     current_count = cred.sign_count or 0
     try:
@@ -162,19 +159,96 @@ def verify_authentication(credential_json: dict, session_token: str) -> dict:
             reason = f"Possible cloned authenticator: {reason}"
         else:
             frappe.log_error(title="Passkey Verification Error", message=f"User: {user}\n{reason}")
-        log_event(user, cred.name, "authentication", False, reason, sign_count_before=current_count)
-        return {"success": False, "message": GENERIC_FAILURE}
+        log_event(user, cred.name, operation, False, reason, sign_count_before=current_count)
+        return None, {"success": False, "message": GENERIC_FAILURE}
 
     new_count = verification.new_sign_count or 0
     updates = {"last_used_at": frappe.utils.now(), "last_used_ip": ip}
     if new_count > 0:
         updates["sign_count"] = new_count
     frappe.db.set_value("Passkey Credential", cred.name, updates, update_modified=False)
-    log_event(user, cred.name, "authentication", True,
+    log_event(user, cred.name, operation, True,
               sign_count_before=current_count, sign_count_after=new_count)
+    return cred, None
 
-    session = create_session_after_passkey_auth(user)
+
+def verify_authentication(credential_json: dict, session_token: str, create_session: bool = True) -> dict:
+    """Verify a login assertion. With create_session=False (token clients) no cookie
+    session is created; the caller issues its own credentials for the returned user."""
+    settings = _settings()
+    rp_id, error = _preflight(settings)
+    if error:
+        return error
+
+    ip = get_client_ip()
+    if is_authentication_blocked(ip):
+        return {"success": False, "message": "Too many attempts. Please try again later."}
+
+    result = _verify_login(credential_json, session_token, settings, rp_id, ip, create_session)
+    if not result.get("success"):
+        record_authentication_failure(ip)
+    return result
+
+
+def _verify_login(credential_json, session_token, settings, rp_id, ip, create_session=True) -> dict:
+    expected_challenge, expected_user = get_and_clear_authentication_challenge(session_token)
+    if not expected_challenge:
+        return {"success": False, "message": "Authentication challenge expired. Please try again.",
+                "expired": True}
+
+    cred, error = _verify_assertion(credential_json, expected_challenge, expected_user, settings,
+                                    rp_id, ip, "authentication")
+    if error:
+        return error
+
+    if not create_session:
+        return {"success": True, "message": "Authentication successful.", "user": cred.user,
+                "credential_name": cred.name}
+
+    session = create_session_after_passkey_auth(cred.user)
     if not session["success"]:
         return {"success": False, "message": session.get("message", "Session creation failed.")}
-    return {"success": True, "message": "Authentication successful.", "user": user,
+    return {"success": True, "message": "Authentication successful.", "user": cred.user,
             "full_name": session.get("full_name", "")}
+
+
+# -- step-up (re-confirm identity of the logged-in user) ----------------------
+
+def get_stepup_options(user_email: str) -> dict:
+    settings = _settings()
+    rp_id, error = _preflight(settings)
+    if error:
+        return error
+    if not check_authentication_options_rate_limit(get_client_ip()):
+        return {"success": False, "message": "Too many attempts. Please try again later."}
+    allow = _allow_credentials(user_email)
+    if not allow:
+        return {"success": False, "message": "You have no passkey to confirm with."}
+    challenge = generate_challenge()
+    options = _base_options(settings, rp_id, challenge)
+    options["allowCredentials"] = allow
+    token = store_authentication_challenge(challenge, user_email, kind="stepup")
+    return {"success": True, "options": options, "session_token": token}
+
+
+def verify_stepup(user_email: str, credential_json: dict, session_token: str) -> dict:
+    settings = _settings()
+    rp_id, error = _preflight(settings)
+    if error:
+        return error
+    ip = get_client_ip()
+    if is_authentication_blocked(ip):
+        return {"success": False, "message": "Too many attempts. Please try again later."}
+
+    expected_challenge, expected_user = get_and_clear_authentication_challenge(session_token, kind="stepup")
+    if not expected_challenge or expected_user != user_email:
+        record_authentication_failure(ip)
+        return {"success": False, "message": "Confirmation expired. Please try again."}
+
+    cred, error = _verify_assertion(credential_json, expected_challenge, user_email, settings,
+                                    rp_id, ip, "verification")
+    if error:
+        record_authentication_failure(ip)
+        return error
+    mark_stepup(user_email)
+    return {"success": True, "message": "Identity confirmed."}

@@ -12,6 +12,7 @@ from .security import (
     get_rp_id, get_user_agent,
 )
 from .serialization import base64url_decode, base64url_encode
+from .session import has_recent_stepup
 from .utils import get_webauthn_user_handle
 
 try:
@@ -23,6 +24,19 @@ except ImportError:
 
 def _settings():
     return frappe.get_single("Passkey Settings")
+
+
+def _stepup_required(user_email: str):
+    """Adding a passkey grants lasting access, so a hijacked session must not be able to do it.
+
+    Returns an error dict when the user has to re-confirm their identity first, else None.
+    """
+    if has_recent_stepup(user_email):
+        return None
+    has_passkeys = bool(frappe.db.count("Passkey Credential",
+                                        filters={"user": user_email, "enabled": 1, "revoked": 0}))
+    return {"success": False, "stepup_required": True, "has_passkeys": has_passkeys,
+            "message": "Please confirm your identity before adding a passkey."}
 
 
 def get_registration_options(user_email: str) -> dict:
@@ -39,6 +53,10 @@ def get_registration_options(user_email: str) -> dict:
     insecure = check_secure_context(settings, rp_id)
     if insecure:
         return {"success": False, "message": insecure}
+
+    stepup = _stepup_required(user_email)
+    if stepup:
+        return stepup
 
     user = frappe.db.get_value("User", user_email, ["name", "full_name", "enabled"], as_dict=True)
     if not user:
@@ -100,6 +118,10 @@ def verify_registration_response(user_email: str, credential_json: dict) -> dict
     if not expected_challenge:
         return {"success": False, "message": "Registration challenge expired. Please try again."}
 
+    stepup = _stepup_required(user_email)
+    if stepup:
+        return stepup
+
     rp_id = get_rp_id(settings)
     insecure = check_secure_context(settings, rp_id)
     if insecure:
@@ -153,6 +175,7 @@ def verify_registration_response(user_email: str, credential_json: dict) -> dict
         })
         cred_doc.insert(ignore_permissions=True)
         log_event(user_email, cred_doc.name, "registration", True)
+        _notify_new_passkey(user_email, cred_doc.nickname)
         return {"success": True, "message": "Passkey registered successfully.",
                 "credential_name": cred_doc.name, "nickname": cred_doc.nickname}
 
@@ -180,3 +203,18 @@ def _suggest_nickname(user_email: str) -> str:
         return "Linux Passkey"
     count = frappe.db.count("Passkey Credential", filters={"user": user_email, "enabled": 1})
     return f"Passkey {count + 1}"
+
+
+def _notify_new_passkey(user_email: str, nickname: str) -> None:
+    """Tell the account owner a passkey was added, so an unexpected one gets noticed."""
+    try:
+        frappe.sendmail(
+            recipients=[user_email],
+            subject=frappe._("A new passkey was added to your account"),
+            message=frappe._(
+                "A passkey named <b>{0}</b> was just added to your account from IP {1}.<br><br>"
+                "If this was not you, open Passkeys in your account, revoke it, and change your password."
+            ).format(frappe.utils.escape_html(nickname or ""), frappe.utils.escape_html(get_client_ip())),
+        )
+    except Exception:
+        frappe.log_error(title="Passkey Notification Error", message=frappe.get_traceback())

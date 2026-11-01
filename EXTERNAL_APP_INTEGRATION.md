@@ -1,5 +1,9 @@
 # External App Integration Guide
 
+> **For Flutter, Angular or native apps, use the token API in [docs/CLIENT_APPS.md](docs/CLIENT_APPS.md).**
+> It registers each app as a *Passkey Client App* and returns OAuth Bearer tokens. This page describes the
+> lower-level browser-session endpoints.
+
 How to authenticate users in Flutter, React Native, or any external app
 using the `passkey_auth` WebAuthn/Passkey API for ERPNext.
 

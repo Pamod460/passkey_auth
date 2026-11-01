@@ -75,15 +75,16 @@ def get_and_clear_registration_challenge(user_email: str):
 
 # -- authentication (bound to a one-time session token) ----------------------
 
-def store_authentication_challenge(challenge: bytes, user_email: str = None) -> str:
+def store_authentication_challenge(challenge: bytes, user_email: str = None, kind: str = "auth") -> str:
+    """`kind` keeps login ("auth") and step-up ("stepup") tokens in separate namespaces."""
     token = new_token()
-    _store("auth", token, {"c": base64url_encode(challenge), "u": user_email})
+    _store(kind, token, {"c": base64url_encode(challenge), "u": user_email})
     return token
 
 
-def get_and_clear_authentication_challenge(token: str):
+def get_and_clear_authentication_challenge(token: str, kind: str = "auth"):
     """Return (challenge_bytes, user_email_or_None) or (None, None)."""
-    data = _pop("auth", token)
+    data = _pop(kind, token)
     if not data:
         return None, None
     return base64url_decode(data["c"]), data.get("u")

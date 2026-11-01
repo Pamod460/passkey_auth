@@ -10,6 +10,7 @@ import struct
 import sys
 import types
 import unittest
+from datetime import datetime, timedelta
 
 try:
     import cbor2
@@ -61,6 +62,16 @@ class FakeCache:
     def expire(self, key, secs):
         pass
 
+    def set(self, key, val, ex=None, nx=False):
+        if nx and key in self.counters:
+            return None
+        self.counters[key] = int(val)
+        return True
+
+    def get(self, key):
+        v = self.counters.get(key)
+        return None if v is None else str(v).encode()
+
 
 class FakeDB:
     def __init__(self, tables):
@@ -104,20 +115,37 @@ class FakeDB:
 
 def install_fake_frappe():
     state = DD(tables={"User": [], "Passkey Credential": [], "Passkey Authentication Log": []},
-               sessions=[], errors=[])
+               sessions=[], errors=[], mails=[], passwords={})
     f = types.ModuleType("frappe")
     f.cache = FakeCache()
     f.db = FakeDB(state.tables)
     f.flags = DD()
     f.local = DD(conf=DD(), site="test.local")
-    f.session = DD(user="Guest")
+    f.session = DD(user="Guest", sid="sid-1", data=DD(creation=datetime.now()))
     f._ = lambda s: s
     f.AuthenticationError = type("AuthenticationError", (Exception,), {})
     f.whitelist = lambda **kw: (lambda fn: fn)
     f.parse_json = lambda v: json.loads(v) if isinstance(v, str) else v
     f.get_traceback = lambda: "traceback"
+
+    def throw(msg, exc=Exception):
+        raise exc(msg)
+    f.throw = throw
     f.log_error = lambda title=None, message=None: state.errors.append((title, message))
-    f.utils = types.SimpleNamespace(now=lambda: "2026-01-01 00:00:00")
+    f.utils = types.SimpleNamespace(now=lambda: "2026-01-01 00:00:00", now_datetime=datetime.now,
+                                    get_datetime=lambda v: v, escape_html=lambda v: v)
+    f.sendmail = lambda **kw: state.mails.append(kw)
+
+    # frappe.utils.password.check_password (used by the password step-up)
+    def check_password(user, pwd):
+        if state.passwords.get(user) != pwd:
+            raise f.AuthenticationError("Incorrect password")
+    pw_mod = types.ModuleType("frappe.utils.password")
+    pw_mod.check_password = check_password
+    utils_mod = types.ModuleType("frappe.utils")
+    utils_mod.password = pw_mod
+    sys.modules["frappe.utils"] = utils_mod
+    sys.modules["frappe.utils.password"] = pw_mod
     f.request = DD(headers={"User-Agent": "Mozilla/5.0 (Windows) Chrome", "X-Forwarded-Proto": "https"},
                    host="erp.example.com", remote_addr="127.0.0.1", scheme="http")
     f.get_single = lambda name: state.settings
@@ -237,7 +265,7 @@ class TestPasskeyFlow(unittest.TestCase):
                                           "custom_passkey_user_handle": None})
         self.frappe.session.user = EMAIL
         # (re)import app modules against the fresh fake
-        for m in [m for m in sys.modules if m.startswith("passkey_auth.passkey") and ".tests" not in m]:
+        for m in [m for m in sys.modules if m.startswith("passkey_auth.passkey_authentication") and ".tests" not in m]:
             del sys.modules[m]
         from passkey_auth.passkey_authentication import api
         self.api = api
@@ -387,18 +415,130 @@ class TestPasskeyFlow(unittest.TestCase):
         self.assertEqual(len(known["allowCredentials"]), len(unknown["allowCredentials"]))
         self.assertEqual(set(known), set(unknown))
 
-    def test_rate_limit(self):
+    def test_rate_limit_counts_failures_not_logins(self):
         self.state.settings.authentication_rate_limit = 3
-        results = [self.api.authentication_options(user_email=None)["success"] for _ in range(5)]
-        self.assertEqual(results, [True, True, True, False, False])
+        auth, _ = self.register()
+        # Many successful logins from one shared IP (e.g. campus NAT) are fine.
+        for _ in range(6):
+            res = self.login_options(EMAIL)
+            out = self.api.verify_authentication(credential=json.dumps(auth.get(res["options"], ORIGIN)),
+                                                 session_token=res["session_token"])
+            self.assertTrue(out["success"], out)
+        # Failed verifications are limited.
+        bad = []
+        for _ in range(5):
+            res = self.login_options(EMAIL)
+            bad.append(self.api.verify_authentication(
+                credential=json.dumps(auth.get(res["options"], "https://evil.example.net")),
+                session_token=res["session_token"])["message"])
+        self.assertNotIn("Too many", " ".join(bad[:3]))
+        self.assertTrue(all("Too many" in m for m in bad[3:]), bad)
+        # Once blocked, even a valid assertion is refused until the window passes.
+        res = self.login_options(EMAIL)
+        out = self.api.verify_authentication(credential=json.dumps(auth.get(res["options"], ORIGIN)),
+                                             session_token=res["session_token"])
+        self.assertFalse(out["success"])
+
+    def test_options_have_loose_flood_limit(self):
+        self.state.settings.authentication_rate_limit = 1
+        results = [self.api.authentication_options(user_email=None)["success"] for _ in range(25)]
+        self.assertEqual(results, [True] * 20 + [False] * 5)
+
+    def test_expired_challenge_is_flagged(self):
+        auth, _ = self.register()
+        res = self.login_options(EMAIL)
+        out = self.api.verify_authentication(credential=json.dumps(auth.get(res["options"], ORIGIN)),
+                                             session_token="not-a-real-token")
+        self.assertFalse(out["success"])
+        self.assertTrue(out.get("expired"))
+
+    # -- step-up before adding a passkey ----------------------------------------
+    def make_session_old(self):
+        self.frappe.session.data = DD(creation=datetime.now() - timedelta(hours=2))
+
+    def test_new_passkey_needs_fresh_login_or_confirmation(self):
+        self.make_session_old()
+        opts = self.api.registration_options()
+        self.assertFalse(opts["success"])
+        self.assertTrue(opts["stepup_required"])
+        self.assertFalse(opts["has_passkeys"])
+
+    def test_password_stepup(self):
+        self.make_session_old()
+        self.state.passwords[EMAIL] = "s3cret"
+        self.assertFalse(self.api.confirm_password(password="wrong")["success"])
+        self.assertTrue(self.api.registration_options()["stepup_required"])
+        self.assertTrue(self.api.confirm_password(password="s3cret")["success"])
+        _, res = self.register()
+        self.assertTrue(res["success"], res)
+
+    def test_stepup_is_bound_to_session(self):
+        self.make_session_old()
+        self.state.passwords[EMAIL] = "s3cret"
+        self.api.confirm_password(password="s3cret")
+        self.frappe.session.sid = "another-session"
+        self.assertTrue(self.api.registration_options().get("stepup_required"))
+
+    def test_passkey_stepup(self):
+        auth, _ = self.register()
+        self.make_session_old()
+        self.assertTrue(self.api.registration_options()["has_passkeys"])
+        opts = self.api.stepup_options()
+        self.assertTrue(opts["success"], opts)
+        # a step-up token cannot be used as a login token
+        self.assertFalse(self.api.verify_authentication(
+            credential=json.dumps(auth.get(opts["options"], ORIGIN)), session_token=opts["session_token"])["success"])
+        opts = self.api.stepup_options()
+        out = self.api.verify_stepup(credential=json.dumps(auth.get(opts["options"], ORIGIN)),
+                                     session_token=opts["session_token"])
+        self.assertTrue(out["success"], out)
+        self.assertEqual(self.state.sessions, [])  # confirms identity, does not log in again
+        _, res = self.register()
+        self.assertTrue(res["success"], res)
+
+    def test_passkey_stepup_rejects_other_users_passkey(self):
+        alice_key, _ = self.register()
+        bob = "bob@example.com"
+        self.state.tables["User"].append({"name": bob, "enabled": 1, "full_name": "Bob",
+                                          "custom_passkey_user_handle": None})
+        self.frappe.session.user = bob
+        self.register()  # bob's own passkey
+        self.make_session_old()
+        opts = self.api.stepup_options()
+        out = self.api.verify_stepup(credential=json.dumps(alice_key.get(opts["options"], ORIGIN)),
+                                     session_token=opts["session_token"])
+        self.assertFalse(out["success"])
+        self.assertTrue(self.api.registration_options().get("stepup_required"))
+
+    def test_new_passkey_sends_notification(self):
+        self.register()
+        self.assertEqual(len(self.state.mails), 1)
+        self.assertEqual(self.state.mails[0]["recipients"], [EMAIL])
 
     # -- management -----------------------------------------------------------
-    def test_last_passkey_guard(self):
-        auth, _ = self.register()
+    def test_last_passkey_can_be_revoked_in_passkey_only_mode(self):
+        # A lost or stolen key must always be revocable by its owner.
+        self.register()
         name = self.state.tables["Passkey Credential"][0]["name"]
         self.state.settings.password_fallback_enabled = 0
-        self.assertFalse(self.api.delete_credential(credential_name=name)["success"])
-        self.state.settings.password_fallback_enabled = 1
+        self.assertTrue(self.api.revoke_credential(credential_name=name)["success"])
+        # ...and with no active passkey left, password login is allowed again (no lockout).
+        from passkey_auth.passkey_authentication.session import on_login
+        self.frappe.flags.passkey_login = False
+        on_login(types.SimpleNamespace(user=EMAIL))  # must not raise
+
+    def test_password_login_blocked_while_passkey_active(self):
+        self.register()
+        self.state.settings.password_fallback_enabled = 0
+        from passkey_auth.passkey_authentication.session import on_login
+        self.frappe.flags.passkey_login = False
+        with self.assertRaises(self.frappe.AuthenticationError):
+            on_login(types.SimpleNamespace(user=EMAIL))
+
+    def test_last_passkey_can_be_deleted(self):
+        self.register()
+        name = self.state.tables["Passkey Credential"][0]["name"]
+        self.state.settings.password_fallback_enabled = 0
         self.assertTrue(self.api.delete_credential(credential_name=name)["success"])
 
     def test_cannot_touch_other_users_credential(self):

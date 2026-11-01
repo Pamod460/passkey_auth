@@ -96,14 +96,19 @@ def parse_allowed_origins(settings) -> list:
 def get_expected_origins(settings, rp_id: str) -> list:
     """All origins a ceremony may legitimately come from."""
     origins = parse_allowed_origins(settings)
-    if origins:
-        return origins
-    scheme = _request_scheme()
-    host = frappe.request.host if frappe.request and frappe.request.host else rp_id
-    # Keep the port (e.g. localhost:8000) only when the host really is the RP ID.
-    if host.split(":")[0] != rp_id:
-        host = rp_id
-    return [f"{scheme}://{host}"]
+    if not origins:
+        scheme = _request_scheme()
+        host = frappe.request.host if frappe.request and frappe.request.host else rp_id
+        # Keep the port (e.g. localhost:8000) only when the host really is the RP ID.
+        if host.split(":")[0] != rp_id:
+            host = rp_id
+        origins = [f"{scheme}://{host}"]
+    # Registered client apps (other web origins, Android apk-key-hash origins, iOS).
+    from .client_apps import get_client_origins
+    for origin in get_client_origins(rp_id):
+        if origin not in origins:
+            origins.append(origin)
+    return origins
 
 
 def check_secure_context(settings, rp_id: str):
@@ -118,25 +123,69 @@ def check_secure_context(settings, rp_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Rate limiting (atomic counter with fixed window)
+# Rate limiting (fixed window, atomic counters)
 # ---------------------------------------------------------------------------
+#
+# Login attempts are limited by *failed* verifications per client IP, so many people
+# signing in successfully from one shared address (campus NAT, office proxy) never
+# lock each other out. Fetching login options only has a loose anti-flood limit,
+# because conditional UI requests options on every login page load.
+
+OPTIONS_LIMIT_MULTIPLIER = 20
+
+
+def _ratelimit_key(cache, key: str) -> str:
+    return cache.make_key(f"passkey_ratelimit:{key}")
+
+
+def _hit(key: str, window: int) -> int:
+    """Increment a window counter and return the new value.
+
+    SET NX EX creates the key together with its TTL, so a crash between the two
+    calls can never leave a counter that never expires.
+    """
+    cache = _cache()
+    rkey = _ratelimit_key(cache, key)
+    cache.set(rkey, 0, ex=window, nx=True)
+    return int(cache.incr(rkey))
+
+
+def _count(key: str) -> int:
+    cache = _cache()
+    return int(cache.get(_ratelimit_key(cache, key)) or 0)
+
 
 def check_rate_limit(key: str, limit: int, window: int = 60) -> bool:
+    """Count one attempt; True while the window has not exceeded `limit`."""
     try:
-        cache = _cache()
-        rkey = cache.make_key(f"passkey_ratelimit:{key}")
-        count = cache.incr(rkey)
-        if count == 1:
-            cache.expire(rkey, window)
-        return count <= limit
+        return _hit(key, window) <= limit
     except Exception:
         frappe.log_error(title="Passkey Rate Limit Error", message=frappe.get_traceback())
         return True
 
 
-def check_authentication_rate_limit(ip_address: str) -> bool:
-    settings = frappe.get_single("Passkey Settings")
-    return check_rate_limit(f"auth:{ip_address}", settings.authentication_rate_limit or 10, 60)
+def _auth_limit() -> int:
+    return frappe.get_single("Passkey Settings").authentication_rate_limit or 10
+
+
+def check_authentication_options_rate_limit(ip_address: str) -> bool:
+    return check_rate_limit(f"authopt:{ip_address}", _auth_limit() * OPTIONS_LIMIT_MULTIPLIER, 60)
+
+
+def is_authentication_blocked(ip_address: str) -> bool:
+    """True when this IP already has too many failed verifications in the window."""
+    try:
+        return _count(f"authfail:{ip_address}") >= _auth_limit()
+    except Exception:
+        frappe.log_error(title="Passkey Rate Limit Error", message=frappe.get_traceback())
+        return False
+
+
+def record_authentication_failure(ip_address: str) -> None:
+    try:
+        _hit(f"authfail:{ip_address}", 60)
+    except Exception:
+        frappe.log_error(title="Passkey Rate Limit Error", message=frappe.get_traceback())
 
 
 def check_registration_rate_limit(user_email: str) -> bool:

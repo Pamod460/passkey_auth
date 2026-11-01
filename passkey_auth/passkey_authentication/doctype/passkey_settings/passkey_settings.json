@@ -96,7 +96,8 @@
             "fieldname": "authentication_rate_limit",
             "fieldtype": "Int",
             "label": "Authentication Rate Limit (per minute)",
-            "default": "10"
+            "default": "10",
+            "description": "Failed passkey verifications allowed per client IP per minute. Successful logins do not count, so users behind a shared IP are not locked out. Fetching login options has a separate, 20x looser flood limit."
         },
         {
             "fieldname": "registration_rate_limit",

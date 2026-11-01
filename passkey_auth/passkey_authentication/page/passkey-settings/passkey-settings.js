@@ -56,7 +56,7 @@ frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
         });
         $list.html(rows.join(""));
         $list.find(".act-rename").on("click", function () { rename($(this).closest(".passkey-card")); });
-        $list.find(".act-revoke").on("click", function () { act("revoke_credential", $(this).closest(".passkey-card"), __("Revoke this passkey?")); });
+        $list.find(".act-revoke").on("click", function () { act("revoke_credential", $(this).closest(".passkey-card"), __("Revoke this passkey? It will stop working immediately.")); });
         $list.find(".act-delete").on("click", function () { act("delete_credential", $(this).closest(".passkey-card"), __("Permanently delete this passkey?")); });
     }
 
@@ -67,12 +67,14 @@ frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
         }
         try {
             const opts = await utils.apiCallAsync("registration_options", {});
+            if (opts.stepup_required) return confirmIdentity(opts.has_passkeys);
             if (!opts.success) throw new Error(opts.message);
 
             const credential = await navigator.credentials.create({ publicKey: utils.toCreationOptions(opts.options) });
             const verify = await utils.apiCallAsync("verify_registration", {
                 credential: utils.serializeAttestation(credential),
             });
+            if (verify.stepup_required) return confirmIdentity(verify.has_passkeys);
             if (!verify.success) throw new Error(verify.message);
 
             utils.showSuccess(__("Passkey registered: ") + (verify.nickname || ""));
@@ -81,6 +83,53 @@ frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
             console.error("Passkey registration error:", error);
             utils.showError(error.name ? utils.mapWebAuthnError(error) : (error.message || __("Registration failed.")));
         }
+    }
+
+    // Adding a passkey needs a recent login or a fresh identity check (server enforced).
+    function confirmIdentity(hasPasskeys) {
+        const done = function () {
+            // A new click gives the browser the user gesture it needs for create().
+            frappe.confirm(__("Identity confirmed. Create the new passkey now?"), handleAdd);
+        };
+        const withPassword = function () {
+            frappe.prompt(
+                { label: __("Your password"), fieldname: "password", fieldtype: "Password", reqd: 1 },
+                async function (values) {
+                    const r = await utils.apiCallAsync("confirm_password", { password: values.password });
+                    r.success ? done() : utils.showError(r.message);
+                },
+                __("Confirm it's you"), __("Confirm")
+            );
+        };
+        if (!hasPasskeys) return withPassword();
+
+        const d = new frappe.ui.Dialog({
+            title: __("Confirm it's you"),
+            fields: [{ fieldtype: "HTML", options: "<p>" + __("Before adding a passkey, confirm your identity with an existing passkey or your password.") + "</p>" }],
+            primary_action_label: __("Use a passkey"),
+            primary_action: async function () {
+                d.hide();
+                try {
+                    const opts = await utils.apiCallAsync("stepup_options", {});
+                    if (!opts.success) throw new Error(opts.message);
+                    const assertion = await navigator.credentials.get({ publicKey: utils.toRequestOptions(opts.options) });
+                    const r = await utils.apiCallAsync("verify_stepup", {
+                        credential: utils.serializeAssertion(assertion),
+                        session_token: opts.session_token,
+                    });
+                    if (!r.success) throw new Error(r.message);
+                    done();
+                } catch (error) {
+                    utils.showError(error.name ? utils.mapWebAuthnError(error) : (error.message || __("Confirmation failed.")));
+                }
+            },
+            secondary_action_label: __("Use password"),
+            secondary_action: function () {
+                d.hide();
+                withPassword();
+            },
+        });
+        d.show();
     }
 
     function rename($card) {

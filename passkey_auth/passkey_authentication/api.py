@@ -7,9 +7,13 @@ import frappe
 
 from .audit import log_event
 from .authentication import get_authentication_options as _auth_options
+from .authentication import get_stepup_options as _stepup_options
 from .authentication import verify_authentication as _verify_auth
+from .authentication import verify_stepup as _verify_stepup
 from .registration import get_registration_options as _reg_options
 from .registration import verify_registration_response as _verify_reg
+from .security import check_rate_limit
+from .session import mark_stepup
 
 NOT_AUTHENTICATED = {"success": False, "message": "Authentication required."}
 
@@ -44,6 +48,47 @@ def verify_registration(credential=None):
     if not credential:
         return {"success": False, "message": "Credential data is required."}
     return _verify_reg(user, credential)
+
+
+# -- step-up: re-confirm identity before adding a passkey --------------------
+
+@frappe.whitelist(methods=["POST"])
+def confirm_password(password=None):
+    user = _logged_in_user()
+    if not user:
+        return NOT_AUTHENTICATED
+    if not password:
+        return {"success": False, "message": "Password is required."}
+    if not check_rate_limit(f"stepup_pwd:{user}", 5, 300):
+        return {"success": False, "message": "Too many attempts. Please try again later."}
+    try:
+        from frappe.utils.password import check_password
+        check_password(user, password)
+    except frappe.AuthenticationError:
+        log_event(user, None, "verification", False, "Wrong password")
+        return {"success": False, "message": "Incorrect password."}
+    log_event(user, None, "verification", True)
+    mark_stepup(user)
+    return {"success": True, "message": "Identity confirmed."}
+
+
+@frappe.whitelist(methods=["POST"])
+def stepup_options():
+    user = _logged_in_user()
+    if not user:
+        return NOT_AUTHENTICATED
+    return _stepup_options(user)
+
+
+@frappe.whitelist(methods=["POST"])
+def verify_stepup(credential=None, session_token=None):
+    user = _logged_in_user()
+    if not user:
+        return NOT_AUTHENTICATED
+    credential = _as_dict(credential)
+    if not credential or not session_token:
+        return {"success": False, "message": "Credential data is required."}
+    return _verify_stepup(user, credential, session_token)
 
 
 # -- authentication (guest) --------------------------------------------------
@@ -84,14 +129,6 @@ def _owned_credential(user, credential_name):
     return frappe.db.get_value("Passkey Credential", {"name": credential_name, "user": user}, "name")
 
 
-def _is_last_usable_passkey(user, credential_name) -> bool:
-    others = frappe.db.count("Passkey Credential", filters={
-        "user": user, "enabled": 1, "revoked": 0, "name": ["!=", credential_name]})
-    if others:
-        return False
-    return not frappe.get_single("Passkey Settings").password_fallback_enabled
-
-
 @frappe.whitelist(methods=["POST"])
 def rename_credential(credential_name=None, nickname=None):
     user = _logged_in_user()
@@ -115,8 +152,6 @@ def revoke_credential(credential_name=None):
         return {"success": False, "message": "Credential name is required."}
     if not _owned_credential(user, credential_name):
         return {"success": False, "message": "Credential not found."}
-    if _is_last_usable_passkey(user, credential_name):
-        return {"success": False, "message": "Cannot revoke the last passkey when password login is disabled."}
     frappe.db.set_value("Passkey Credential", credential_name, {"revoked": 1, "enabled": 0})
     log_event(user, credential_name, "revocation", True)
     return {"success": True, "message": "Passkey revoked."}
@@ -131,8 +166,6 @@ def delete_credential(credential_name=None):
         return {"success": False, "message": "Credential name is required."}
     if not _owned_credential(user, credential_name):
         return {"success": False, "message": "Credential not found."}
-    if _is_last_usable_passkey(user, credential_name):
-        return {"success": False, "message": "Cannot delete the last passkey when password login is disabled."}
     frappe.delete_doc("Passkey Credential", credential_name, ignore_permissions=True)
     log_event(user, credential_name, "deletion", True)
     return {"success": True, "message": "Passkey deleted."}

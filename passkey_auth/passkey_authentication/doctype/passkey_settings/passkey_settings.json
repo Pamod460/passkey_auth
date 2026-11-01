@@ -37,7 +37,7 @@
             "fieldname": "allowed_origins",
             "fieldtype": "Small Text",
             "label": "Allowed Origins",
-            "description": "JSON array: [\"https://erp.example.com\"]"
+            "description": "Optional JSON array, e.g. [\"https://erp.example.com\"]. If empty, the origin is derived from RP ID."
         },
         {
             "fieldname": "section_security",
@@ -55,7 +55,8 @@
             "fieldname": "password_fallback_enabled",
             "fieldtype": "Check",
             "label": "Allow Password Login",
-            "default": "1"
+            "default": "1",
+            "description": "If unchecked, users who have an active passkey can only sign in with it (Administrator is exempt)."
         },
         {
             "fieldname": "challenge_timeout",
@@ -113,6 +114,13 @@
             "fieldtype": "Check",
             "label": "Enable Audit Logging",
             "default": "1"
+        },
+        {
+            "fieldname": "log_retention_days",
+            "fieldtype": "Int",
+            "label": "Log Retention (days)",
+            "default": "90",
+            "description": "Audit log entries older than this are deleted daily. 0 keeps them forever."
         },
         {
             "fieldname": "section_advanced",

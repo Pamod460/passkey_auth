@@ -23,16 +23,15 @@
         },
         {
             "fieldname": "credential",
-            "fieldtype": "Link",
+            "fieldtype": "Data",
             "label": "Credential",
-            "options": "Passkey Credential",
             "in_list_view": 1
         },
         {
             "fieldname": "operation",
             "fieldtype": "Select",
             "label": "Operation",
-            "options": "\nregistration\nauthentication",
+            "options": "\nregistration\nauthentication\nrevocation\ndeletion",
             "reqd": 1,
             "in_list_view": 1,
             "in_standard_filter": 1

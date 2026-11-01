@@ -68,14 +68,14 @@ Content-Type: application/json
       "rpId": "erp-test.cmb.ac.lk",
       "challenge": "a1b2c3d4...",
       "timeout": 120000,
-      "userVerification": "preferred",
-      "_session_token": "xYz123..."
-    }
+      "userVerification": "preferred"
+    },
+    "session_token": "xYz123..."
   }
 }
 ```
 
-Save `_session_token` — you need it for verify. All other fields map directly to the WebAuthn `PublicKeyCredentialRequestOptions`.
+Save `session_token` (next to `options`). It is required for verify and works once. The `options` fields map directly to the WebAuthn `PublicKeyCredentialRequestOptions`.
 
 ### 3. Call the platform WebAuthn API
 

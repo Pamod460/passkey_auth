@@ -1,14 +1,18 @@
 """Scheduled tasks."""
 import frappe
+from frappe.utils import add_days, now_datetime
 
 
-def cleanup_expired_challenges():
-    frappe.logger().info("Passkey: Running daily cleanup.")
+def cleanup_old_logs():
+    """Delete audit-log entries older than the configured retention (default 90 days).
+
+    Challenges live in Redis with a TTL and expire on their own.
+    """
     try:
-        frappe.db.sql(
-            """DELETE FROM `tabPasskey Authentication Log`
-               WHERE timestamp < DATE_SUB(NOW(), INTERVAL 90 DAY)"""
-        )
-        frappe.db.commit()
-    except Exception as e:
-        frappe.log_error(title="Passkey Cleanup Error", message=str(e))
+        days = int(frappe.db.get_single_value("Passkey Settings", "log_retention_days") or 90)
+        if days <= 0:
+            return
+        frappe.db.delete("Passkey Authentication Log",
+                         {"timestamp": ["<", add_days(now_datetime(), -days)]})
+    except Exception:
+        frappe.log_error(title="Passkey Cleanup Error", message=frappe.get_traceback())

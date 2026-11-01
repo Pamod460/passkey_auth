@@ -5,16 +5,14 @@ import base64
 def base64url_encode(data: bytes) -> str:
     if not isinstance(data, (bytes, bytearray)):
         raise TypeError("data must be bytes or bytearray")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+    return base64.urlsafe_b64encode(bytes(data)).rstrip(b"=").decode("ascii")
 
 
 def base64url_decode(s: str) -> bytes:
     if not isinstance(s, str):
         raise TypeError("input must be a string")
-    s = s.strip().replace("-", "+").replace("_", "/")
-    padding = 4 - len(s) % 4
-    if padding != 4:
-        s += "=" * padding
+    s = s.strip()
+    s += "=" * (-len(s) % 4)
     return base64.urlsafe_b64decode(s)
 
 

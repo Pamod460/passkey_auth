@@ -23,7 +23,7 @@
     });
 
     async function checkAndShowPopup() {
-        var utils = UCSCPasskey.utils;
+        var utils = PasskeyAuth.utils;
         if (!utils) {
             console.log("[Passkey Popup] Skipped: utils not loaded");
             return;
@@ -78,7 +78,7 @@
     }
 
     function showRegistrationDialog() {
-        var utils = UCSCPasskey.utils;
+        var utils = PasskeyAuth.utils;
         var d = new frappe.ui.Dialog({
             title: __("Set Up Passkey"),
             indicator: "blue",
@@ -120,7 +120,7 @@
     }
 
     async function handlePopupRegister(dialog) {
-        var utils = UCSCPasskey.utils;
+        var utils = PasskeyAuth.utils;
         if (!utils.isWebAuthnSupported()) {
             utils.showError(__("Your browser does not support passkeys."));
             return;

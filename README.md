@@ -5,7 +5,7 @@ WebAuthn/Passkey authentication for Frappe Framework / ERPNext 16.
 ## Install
 
 ```bash
-bench get-app /path/to/passkey_auth
+bench get-app https://github.com/Pamod460/passkey_auth
 bench --site <site> install-app passkey_auth
 bench --site <site> migrate
 bench build --app passkey_auth

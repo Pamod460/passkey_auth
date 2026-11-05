@@ -85,7 +85,7 @@
    "fieldname": "android_package_name",
    "fieldtype": "Data",
    "label": "Package Name",
-   "description": "e.g. lk.ac.cmb.ucsc.app"
+   "description": "e.g. com.example.app"
   },
   {
    "fieldname": "android_sha256_fingerprints",
@@ -102,7 +102,7 @@
    "fieldname": "ios_app_ids",
    "fieldtype": "Small Text",
    "label": "App IDs",
-   "description": "One per line as TEAMID.bundle.id, e.g. ABCDE12345.lk.ac.cmb.ucsc.app. The app needs the associated domain webcredentials:<RP ID>."
+   "description": "One per line as TEAMID.bundle.id, e.g. ABCDE12345.com.example.app. The app needs the associated domain webcredentials:<RP ID>."
   },
   {
    "fieldname": "section_tokens",

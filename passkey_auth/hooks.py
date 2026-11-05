@@ -1,8 +1,8 @@
 app_name = "passkey_auth"
 app_title = "Passkey Authentication"
-app_publisher = "UCSC"
+app_publisher = "RJPK Jayasundara"
 app_description = "Production-ready WebAuthn/Passkey authentication for Frappe/ERPNext"
-app_email = "admin@ucsc.cmb.ac.lk"
+app_email = "109800446+Pamod460@users.noreply.github.com"
 app_license = "MIT"
 
 # --------------------------------------------------------------------------

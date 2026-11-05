@@ -28,9 +28,9 @@ App                                  ERP (passkey_auth)
    | Platform | Field | Example |
    |---|---|---|
    | Angular / Flutter web | Web Origins | `https://portal.example.com` |
-   | Android | Package Name | `lk.ac.cmb.ucsc.app` |
+   | Android | Package Name | `com.example.app` |
    | Android | SHA-256 Fingerprints | `AB:CD:...` (one per line: debug key, upload key **and** Play app-signing key) |
-   | iOS | App IDs | `ABCDE12345.lk.ac.cmb.ucsc.app` (Team ID + bundle ID) |
+   | iOS | App IDs | `ABCDE12345.com.example.app` (Team ID + bundle ID) |
 
    The **Client ID** shown on the record is what the app sends as `client_id`.
 3. The ERP now serves, from these records:

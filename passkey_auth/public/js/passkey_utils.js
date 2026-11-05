@@ -1,9 +1,9 @@
 /**
  * Shared passkey helpers: base64url, WebAuthn option building, API calls.
  */
-window.UCSCPasskey = window.UCSCPasskey || {};
+window.PasskeyAuth = window.PasskeyAuth || {};
 
-UCSCPasskey.utils = {
+PasskeyAuth.utils = {
     API: "passkey_auth.passkey_authentication.api.",
 
     base64urlEncode: function (buffer) {
@@ -63,7 +63,7 @@ UCSCPasskey.utils = {
         });
         return new Promise(function (resolve, reject) {
             frappe.call({
-                method: UCSCPasskey.utils.API + method,
+                method: PasskeyAuth.utils.API + method,
                 type: "POST",
                 args: payload,
                 callback: function (r) { resolve(r.message || {}); },
@@ -82,7 +82,7 @@ UCSCPasskey.utils = {
         };
         if (options.allowCredentials && options.allowCredentials.length) {
             pk.allowCredentials = options.allowCredentials.map(function (c) {
-                const entry = { id: UCSCPasskey.utils.base64urlDecode(c.id), type: c.type };
+                const entry = { id: PasskeyAuth.utils.base64urlDecode(c.id), type: c.type };
                 if (c.transports) entry.transports = c.transports;
                 return entry;
             });
@@ -107,7 +107,7 @@ UCSCPasskey.utils = {
         };
         if (options.excludeCredentials && options.excludeCredentials.length) {
             pk.excludeCredentials = options.excludeCredentials.map(function (c) {
-                return { id: UCSCPasskey.utils.base64urlDecode(c.id), type: c.type };
+                return { id: PasskeyAuth.utils.base64urlDecode(c.id), type: c.type };
             });
         }
         return pk;

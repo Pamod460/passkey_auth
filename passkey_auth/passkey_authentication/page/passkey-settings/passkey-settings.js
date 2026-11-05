@@ -1,5 +1,5 @@
 frappe.pages["passkey-settings"].on_page_load = function (wrapper) {
-    const utils = UCSCPasskey.utils;
+    const utils = PasskeyAuth.utils;
     const page = frappe.ui.make_app_page({
         parent: wrapper,
         title: __("Passkeys"),

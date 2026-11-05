@@ -5,8 +5,8 @@
 (function () {
     "use strict";
 
-    if (typeof UCSCPasskey === "undefined" || !UCSCPasskey.utils) return;
-    const utils = UCSCPasskey.utils;
+    if (typeof PasskeyAuth === "undefined" || !PasskeyAuth.utils) return;
+    const utils = PasskeyAuth.utils;
     const ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg>';
     let conditionalAbort = null;
     let conditionalTimer = null;

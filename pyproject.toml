@@ -4,13 +4,17 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "passkey_auth"
-authors = [{ name = "UCSC", email = "admin@ucsc.cmb.ac.lk" }]
+authors = [{ name = "RJPK Jayasundara", email = "109800446+Pamod460@users.noreply.github.com" }]
 description = "Production-ready WebAuthn/Passkey authentication for Frappe/ERPNext"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 license = { text = "MIT" }
 dependencies = ["webauthn>=2.5.0,<3.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/Pamod460/passkey_auth"
+Issues = "https://github.com/Pamod460/passkey_auth/issues"
 
 [tool.bench.frappe-dependencies]
 frappe = ">=16.0.0-dev,<17.0.0"
